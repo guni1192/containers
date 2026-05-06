@@ -1,0 +1,61 @@
+name: Build SCION
+
+on:
+  workflow_dispatch:
+    inputs:
+      scion_ref:
+        description: "GoogleCloudPlatform/scion git ref (tag, branch, or SHA)"
+        type: string
+        default: "0.1.0-dev"
+      target:
+        description: "Build target"
+        type: choice
+        options:
+          - all
+          - common
+          - core-base
+          - scion-base
+          - harnesses
+        default: all
+      tag:
+        description: "Mutable image tag (the upstream short SHA is always added)"
+        type: string
+        default: latest
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout SCION
+        uses: actions/checkout@v4
+        with:
+          repository: GoogleCloudPlatform/scion
+          ref: ${{ inputs.scion_ref }}
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push SCION images
+        run: |
+          image-build/scripts/build-images.sh \
+            --registry "ghcr.io/${{ github.repository }}" \
+            --target "${{ inputs.target }}" \
+            --tag "${{ inputs.tag }}" \
+            --platform linux/arm64 \
+            --push
